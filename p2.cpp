@@ -162,7 +162,21 @@ static llvm::Statistic CSELdElim = {"", "CSELdElim", "CSE redundant loads"};
 static llvm::Statistic CSEStore2Load = {"", "CSEStore2Load", "CSE forwarded store to load"};
 static llvm::Statistic CSEStElim = {"", "CSEStElim", "CSE redundant stores"};
 
+static bool ignoreForCSE(){
+    
+    return false; 
+}
+
 static void CommonSubexpressionElimination(Module *) {
-    // Implement this function
+    /* Remove IF:
+     * Same opcode
+     * Same type (LLVMTypeOf of the instruction not its operands)
+     * Same number of operands
+     * Same operands in the same order (no commutativity)
+     * */
+
+    // Start with the simplest module: one basic block
+    // Avoids: Loads, Stores, Terminators, VAArg, Calls, Allocas, and FCmps
+    ignoreForCSE();
 }
 
