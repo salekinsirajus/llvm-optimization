@@ -8,11 +8,14 @@ Docker
 
 ### Getting Started
 Build a docker container using the docker file provided.
-
-### Build
-
+```
+docker build -t llvmp2:latest .
+```
 
 ### Run
+```
+docker run -v $(pwd):/ece566 -it llvmp2:latest /bin/bash
+```
 
 ---
 ### Checklist
