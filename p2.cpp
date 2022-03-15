@@ -166,12 +166,17 @@ static llvm::Statistic CSEStElim = {"", "CSEStElim", "CSE redundant stores"};
 
 
 static bool ignoreForCSE(Instruction &I){
-    // Avoids: Loads, Stores, Terminators, VAArg, Calls, Allocas, and FCmps
-    if (isa<LoadInst>(&I) || isa<StoreInst>(&I)){
-        printf("this instruction is a load or store\n");
+    /* Instruction is not a good candidate for CSE if they are of the following
+     * type: Loads, Stores, Terminators, VAArg, Calls, Allocas, and FCmps
+     */
+    if (isa<LoadInst>(&I) || isa<StoreInst>(&I) ||
+        isa<AllocaInst>(&I) || isa<FCmpInst>(&I) ||
+        isa<CallInst>(&I) || isa<VAArgInst>(&I)  ||
+        I.isTerminator()
+       ){
         return true;
     }
-    printf("Not a load: OpCode %d\n", I.getOpcode());
+
     return false; 
 }
 
