@@ -24,6 +24,8 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 
+#include "llvm/IR/InstIterator.h"
+
 using namespace llvm;
 
 static void CommonSubexpressionElimination(Module *);
@@ -162,21 +164,49 @@ static llvm::Statistic CSELdElim = {"", "CSELdElim", "CSE redundant loads"};
 static llvm::Statistic CSEStore2Load = {"", "CSEStore2Load", "CSE forwarded store to load"};
 static llvm::Statistic CSEStElim = {"", "CSEStElim", "CSE redundant stores"};
 
-static bool ignoreForCSE(){
-    
+
+static bool ignoreForCSE(Instruction &I){
+    // Avoids: Loads, Stores, Terminators, VAArg, Calls, Allocas, and FCmps
+    if (isa<LoadInst>(&I) || isa<StoreInst>(&I)){
+        printf("this instruction is a load or store\n");
+        return true;
+    }
+    printf("Not a load: OpCode %d\n", I.getOpcode());
     return false; 
 }
 
-static void CommonSubexpressionElimination(Module *) {
+static bool isLiteralMatch(Instruction *a, Instruction *b){
     /* Remove IF:
      * Same opcode
      * Same type (LLVMTypeOf of the instruction not its operands)
      * Same number of operands
      * Same operands in the same order (no commutativity)
      * */
+    
+    return false;
+} 
+
+static void CommonSubexpressionElimination(Module *M) {
 
     // Start with the simplest module: one basic block
-    // Avoids: Loads, Stores, Terminators, VAArg, Calls, Allocas, and FCmps
-    ignoreForCSE();
+
+    // Iterate over basic blocks
+    //    Iteratve over instructions in basic blocks
+    //    FIXME: the following way of iterating might cause trouble when you delete
+    //    instruction from the iterator
+
+    for (Module::iterator func = M->begin(); func != M->end(); ++func){
+	    for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
+		    for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
+                //Check if this instruction can be ignored for CSE
+                //If not, put this somewhere in a container and compare as
+                //instructions come in. when you find a candidate, delete the second one
+                Instruction& inst = *bbi;
+                if (ignoreForCSE(inst)){
+                    continue;
+                }
+		    }
+	    }
+    }
 }
 
