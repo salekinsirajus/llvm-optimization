@@ -274,6 +274,7 @@ static bool RunSimplifyInstruction(Instruction &I, const SimplifyQuery &Q){
     if (result != nullptr) {
         //replace uses with result
         k->replaceAllUsesWith(result);
+        CSESimplify++;
         return true;
     }
     //leave it be
