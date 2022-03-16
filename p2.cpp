@@ -29,6 +29,7 @@
 
 using namespace llvm;
 
+
 static void CommonSubexpressionElimination(Module *);
 
 static void summarize(Module *M);
@@ -218,7 +219,6 @@ static bool shouldRemoveTrivialDeadCode(Instruction &x){
     }
 
     if (x.use_empty()){
-        printf("instruction has no use\n");
         return true;
     }
 
@@ -246,7 +246,7 @@ static void CommonSubexpressionElimination(Module *M) {
                 } else {
                     // run common subexpression elimination 
                     if (isLiteralMatch(inst, inst)){
-                        printf("Literal match, remove the first one!\n");        
+                        //remove the second one
                     }
                 }
                 // FIXME: depending on the order of optimization, you may need
@@ -257,7 +257,7 @@ static void CommonSubexpressionElimination(Module *M) {
                     ++bbi;
                     //remove this instruction
                     inst.eraseFromParent();
-
+                    CSEDead++;
                 }
 		    }
 	    }
