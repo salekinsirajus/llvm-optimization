@@ -25,6 +25,7 @@
 #include "llvm/Analysis/InstructionSimplify.h"
 
 #include "llvm/IR/InstIterator.h"
+#include "llvm/Transforms/Utils/FunctionComparator.h"
 
 using namespace llvm;
 
@@ -180,13 +181,25 @@ static bool ignoreForCSE(Instruction &I){
     return false; 
 }
 
-static bool isLiteralMatch(Instruction *a, Instruction *b){
+static bool isLiteralMatch(Instruction &a, Instruction &b){
     /* Remove IF:
      * Same opcode
      * Same type (LLVMTypeOf of the instruction not its operands)
      * Same number of operands
      * Same operands in the same order (no commutativity)
      * */
+    if (a.getOpcode() == b.getOpcode() && a.getType() == b.getType() &&
+        a.getNumOperands() == b.getNumOperands()
+       ){
+
+        int c = a.getNumOperands() - 1;
+        while (c >= 0){
+            a.getOperand(c);
+            b.getOperand(c);
+            c--;
+        } 
+    	return true;
+    }
     
     return false;
 } 
@@ -209,6 +222,9 @@ static void CommonSubexpressionElimination(Module *M) {
                 Instruction& inst = *bbi;
                 if (ignoreForCSE(inst)){
                     continue;
+                }
+                if (isLiteralMatch(inst, inst)){
+                    printf("Literal match, remove the first one!\n");        
                 }
 		    }
 	    }
