@@ -266,6 +266,7 @@ static bool RunSimplifyInstruction(Instruction &I, const SimplifyQuery &Q){
      *
      * If any simplification was achieved, it replaces the uses of this value
      * */
+
     Instruction *k;
     k = &I;
     Value* result = SimplifyInstruction(k, Q);
@@ -273,7 +274,6 @@ static bool RunSimplifyInstruction(Instruction &I, const SimplifyQuery &Q){
     if (result != nullptr) {
         //replace uses with result
         k->replaceAllUsesWith(result);
-        k->eraseFromParent();
         return true;
     }
     //leave it be
@@ -294,7 +294,10 @@ static void CommonSubexpressionElimination(Module *M) {
 		    for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
                 Instruction& inst = *bbi;
                 if (RunSimplifyInstruction(inst, M->getDataLayout())){
-                    ++bbi; 
+
+                    	++bbi; 
+			inst.eraseFromParent();
+			continue;
                 }
 
                 // FIXME: depending on the order of optimization, you may need
@@ -306,6 +309,7 @@ static void CommonSubexpressionElimination(Module *M) {
                     //remove this instruction
                     inst.eraseFromParent();
                     CSEDead++;
+		    continue;
                 }
 	        }
 	    }
