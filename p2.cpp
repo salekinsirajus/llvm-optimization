@@ -195,8 +195,8 @@ static bool isLiteralMatch(Instruction &a, Instruction &b){
 
         int c = a.getNumOperands() - 1;
         while (c >= 0){
-            a.getOperand(c);
-            b.getOperand(c);
+            if (a.getOperand(c)->getType() == b.getOperand(c)->getType()) {return false;}
+            if (a.getOperand(c)->getValueID() == b.getOperand(c)->getValueID()) {return false;}
             c--;
         } 
     	return true;
@@ -225,6 +225,39 @@ static bool shouldRemoveTrivialDeadCode(Instruction &x){
     return false;
 }
 
+static void runCSEBasic(Module *M){
+    /**
+     *
+    DominatorTreeBase<BasicBlock,false> *DT=nullptr; //dominance
+    DominatorTreeBase<BasicBlock,true> *PDT=nullptr; //post-dominance
+
+    DT = new DominatorTreeBase<BasicBlock,false>();
+    PDT = new DominatorTreeBase<BasicBlock,true>();
+
+
+    DT->recalculate(*F); // F is Function*. Use one DominatorTreeBase and recalculate tree for each function you visit
+    PDT->recalculate(*F);
+
+    DomTreeNodeBase<BasicBlock> *Node = DT->getNode(bb); // get Node from some basic block*
+    DomTreeNodeBase<BasicBlock>::iterator it,end;
+    for(it=Node->begin(),end=Node->end(); it!=end; it++)
+    {
+        BasicBlock *bb_next = (*it)->getBlock(); // get each bb it immediately dominates
+    }
+     *
+     *
+     * */
+    for (Module::iterator func = M->begin(); func != M->end(); ++func){
+        for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
+            for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
+            Instruction& inst = *bbi;
+            //if (ignoreForCSE(inst)){
+            }
+        }
+    }
+
+}
+
 static void CommonSubexpressionElimination(Module *M) {
 
     // Start with the simplest module: one basic block
@@ -241,14 +274,6 @@ static void CommonSubexpressionElimination(Module *M) {
                 //If not, put this somewhere in a container and compare as
                 //instructions come in. when you find a candidate, delete the second one
                 Instruction& inst = *bbi;
-                if (ignoreForCSE(inst)){
-                    continue;
-                } else {
-                    // run common subexpression elimination 
-                    if (isLiteralMatch(inst, inst)){
-                        //remove the second one
-                    }
-                }
                 // FIXME: depending on the order of optimization, you may need
                 // to exit the loop early
                 // run DCE
@@ -259,7 +284,7 @@ static void CommonSubexpressionElimination(Module *M) {
                     inst.eraseFromParent();
                     CSEDead++;
                 }
-		    }
+	        }
 	    }
     }
 }
