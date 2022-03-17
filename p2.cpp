@@ -26,6 +26,7 @@
 
 #include "llvm/IR/InstIterator.h"
 #include "llvm/Transforms/Utils/FunctionComparator.h"
+#include "llvm/IR/Value.h"
 
 using namespace llvm;
 
@@ -225,6 +226,7 @@ static bool shouldRemoveTrivialDeadCode(Instruction &x){
     return false;
 }
 
+
 static void runCSEBasic(Module *M){
     /**
      *
@@ -258,6 +260,27 @@ static void runCSEBasic(Module *M){
 
 }
 
+
+static bool RunSimplifyInstruction(Instruction &I, const SimplifyQuery &Q){
+    /* Runs the simplifyInstruction library function
+     *
+     * If any simplification was achieved, it replaces the uses of this value
+     * */
+
+    Instruction *k;
+    k = &I;
+    Value* result = SimplifyInstruction(k, Q);
+    
+    if (result != nullptr) {
+        //replace uses with result
+        k->replaceAllUsesWith(result);
+        CSESimplify++;
+        return true;
+    }
+    //leave it be
+    return false;
+}
+
 static void CommonSubexpressionElimination(Module *M) {
 
     // Start with the simplest module: one basic block
@@ -270,10 +293,14 @@ static void CommonSubexpressionElimination(Module *M) {
     for (Module::iterator func = M->begin(); func != M->end(); ++func){
 	    for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
 		    for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
-                //Check if this instruction can be ignored for CSE
-                //If not, put this somewhere in a container and compare as
-                //instructions come in. when you find a candidate, delete the second one
                 Instruction& inst = *bbi;
+                if (RunSimplifyInstruction(inst, M->getDataLayout())){
+
+                    	++bbi; 
+			inst.eraseFromParent();
+			continue;
+                }
+
                 // FIXME: depending on the order of optimization, you may need
                 // to exit the loop early
                 // run DCE
@@ -283,6 +310,7 @@ static void CommonSubexpressionElimination(Module *M) {
                     //remove this instruction
                     inst.eraseFromParent();
                     CSEDead++;
+		    continue;
                 }
 	        }
 	    }
