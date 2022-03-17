@@ -54,4 +54,5 @@ RUN useradd -m user \
   && yes password | passwd user
 
 COPY . /ece566
+COPY .vimrc /root/.vimrc
 CMD ["/usr/sbin/sshd", "-D", "-e", "-f", "/etc/ssh/sshd_config_test_clion"]
