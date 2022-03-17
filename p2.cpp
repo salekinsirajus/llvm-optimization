@@ -206,6 +206,7 @@ static bool isLiteralMatch(Instruction &a, Instruction &b){
     return false;
 } 
 
+
 static bool shouldRemoveTrivialDeadCode(Instruction &x){
     /* Similar to isTriviallyDeadInstruction
      *
@@ -229,7 +230,11 @@ static bool shouldRemoveTrivialDeadCode(Instruction &x){
 
 static void runCSEBasic(Module *M){
     /**
-     *
+     * Runs the Basic CSE Pass 
+    /* Also Runs a non-aggresive Dead Code Elimination Pass
+     * 
+     * 
+     * 
     DominatorTreeBase<BasicBlock,false> *DT=nullptr; //dominance
     DominatorTreeBase<BasicBlock,true> *PDT=nullptr; //post-dominance
 
@@ -252,12 +257,21 @@ static void runCSEBasic(Module *M){
     for (Module::iterator func = M->begin(); func != M->end(); ++func){
         for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
             for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
-            Instruction& inst = *bbi;
-            //if (ignoreForCSE(inst)){
+                Instruction& inst = *bbi;
+                //if (ignoreForCSE(inst)){
+
+                //FIXME: when you fully flesh out CSE, ensure proper ordering
+                //since there is no way you can run CSE on deleted instruction
+                if (shouldRemoveTrivialDeadCode(inst)){
+                    //set the iterator
+                    ++bbi;
+                    //remove this instruction
+                    inst.eraseFromParent();
+                    CSEDead++;
+                }
             }
         }
     }
-
 }
 
 
@@ -281,39 +295,31 @@ static bool RunSimplifyInstruction(Instruction &I, const SimplifyQuery &Q){
     return false;
 }
 
-static void CommonSubexpressionElimination(Module *M) {
-
-    // Start with the simplest module: one basic block
-
-    // Iterate over basic blocks
-    //    Iteratve over instructions in basic blocks
-    //    FIXME: the following way of iterating might cause trouble when you delete
-    //    instruction from the iterator
+static void SimplifyInstructionPass(Module *M){
+    /* Runs a pass where you try do simple constant folding and such things
+     *
+     * */
 
     for (Module::iterator func = M->begin(); func != M->end(); ++func){
-	    for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
-		    for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
+        for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
+            for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
                 Instruction& inst = *bbi;
                 if (RunSimplifyInstruction(inst, M->getDataLayout())){
-
-                    	++bbi; 
-			inst.eraseFromParent();
-			continue;
-                }
-
-                // FIXME: depending on the order of optimization, you may need
-                // to exit the loop early
-                // run DCE
-                if (shouldRemoveTrivialDeadCode(inst)){
-                    //set the iterator
                     ++bbi;
-                    //remove this instruction
                     inst.eraseFromParent();
-                    CSEDead++;
-		    continue;
                 }
-	        }
-	    }
+            }
+        }
     }
+}
+
+static void CommonSubexpressionElimination(Module *M) {
+    /* Driver function
+     * 
+     * Runs different optimization sub-passes in a certain order
+     * */
+
+    runCSEBasic(M);
+    SimplifyInstructionPass(M);
 }
 
