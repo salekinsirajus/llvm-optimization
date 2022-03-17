@@ -26,6 +26,7 @@
 
 #include "llvm/IR/InstIterator.h"
 #include "llvm/Transforms/Utils/FunctionComparator.h"
+#include "llvm/Transforms/InstCombine/InstCombiner.h"
 
 using namespace llvm;
 
@@ -258,6 +259,65 @@ static void runCSEBasic(Module *M){
 
 }
 
+static bool examineIfLoadIsRedundant(Instruction &I){
+
+    Instruction* next_inst =  I.getNextNode();
+    //BasicBlock::iterator BBI = &I;
+    Value *Op = I.getOperand(0);
+
+    while (!next_inst->isTerminator()) {
+        if (isa<LoadInst>(&next_inst) && !next_inst->isVolatile()){
+            if (I.getType() == next_inst->getType() && I.getOperand(0) == next_inst->getOperand(0)){
+                //replace the use of next_inst
+
+                /*
+                if (Value *AvailableVal = FindAvailableLoadedValue(Op, I.getParent(), BBI,6)){
+                ReplaceInstUsesWith(next_inst, AvailableVal);}
+*/
+                next_inst.replaceAllUsesWith(I.getValue());
+
+                next_inst->eraseFromParent();
+                CSELdElim++;
+                
+                next_inst = next_inst->getNextNode();
+                continue;
+            }
+        }
+
+        if (isa<StoreInst>(&next_inst)){
+            //TODO: as soon as we see an intervening store or call to any
+            //address
+            //Stop considering I altogether 
+            return false;
+        }
+
+        next_inst =  next_inst->getNextNode();
+    }
+
+    //probably does not add much value
+    return true;
+}
+
+static void EliminatRedundantLoadPass(Module *M){
+    /* Examines a load and eliminates redundant loads within the same basic
+     * block
+     *
+     * */
+    for (Module::iterator func = M->begin(); func != M->end(); ++func){
+        for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
+            for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
+            Instruction& inst = *bbi;
+            if (isa<LoadInst>(&inst)){
+                if (!examineIfLoadIsRedundant(inst)){
+                    //if the function returns false, stop considering this load
+                    //altogether
+                    continue;
+                    }
+                }
+            }
+        }
+    }
+}
 static void CommonSubexpressionElimination(Module *M) {
 
     // Start with the simplest module: one basic block
