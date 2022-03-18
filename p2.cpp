@@ -259,39 +259,36 @@ static void runCSEBasic(Module *M){
 
 }
 
-static bool examineIfLoadIsRedundant(Instruction &I){
+static bool examineIfLoadIsRedundant(Instruction &I, BasicBlock::iterator it, Function::iterator fi){
 
-    Instruction* next_inst =  I.getNextNode();
-    //BasicBlock::iterator BBI = &I;
-    Value *Op = I.getOperand(0);
-
-    while (!next_inst->isTerminator()) {
-        if (isa<LoadInst>(&next_inst) && !next_inst->isVolatile()){
+    Instruction* old;
+    Instruction* load =  &I;
+ 
+    while (it != fi->end()){
+        Instruction* next_inst = &*it;
+        if (isa<LoadInst>(next_inst) && !next_inst->isVolatile()){
             if (I.getType() == next_inst->getType() && I.getOperand(0) == next_inst->getOperand(0)){
-                //replace the use of next_inst
 
-                /*
-                if (Value *AvailableVal = FindAvailableLoadedValue(Op, I.getParent(), BBI,6)){
-                ReplaceInstUsesWith(next_inst, AvailableVal);}
-*/
-                next_inst.replaceAllUsesWith(I.getValue());
+                next_inst->replaceAllUsesWith(load);
+                ++it;
 
-                next_inst->eraseFromParent();
+                old = next_inst;
+                old->eraseFromParent();
                 CSELdElim++;
-                
-                next_inst = next_inst->getNextNode();
+
                 continue;
             }
         }
 
-        if (isa<StoreInst>(&next_inst)){
+        if (isa<StoreInst>(next_inst)){
             //TODO: as soon as we see an intervening store or call to any
             //address
             //Stop considering I altogether 
             return false;
         }
 
-        next_inst =  next_inst->getNextNode();
+        ++it;
+        //next_inst =  next_inst->getNextNode();
     }
 
     //probably does not add much value
@@ -308,7 +305,7 @@ static void EliminatRedundantLoadPass(Module *M){
             for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
             Instruction& inst = *bbi;
             if (isa<LoadInst>(&inst)){
-                if (!examineIfLoadIsRedundant(inst)){
+                if (!examineIfLoadIsRedundant(inst, bbi, fi)){
                     //if the function returns false, stop considering this load
                     //altogether
                     continue;
@@ -326,6 +323,8 @@ static void CommonSubexpressionElimination(Module *M) {
     //    Iteratve over instructions in basic blocks
     //    FIXME: the following way of iterating might cause trouble when you delete
     //    instruction from the iterator
+
+    EliminatRedundantLoadPass(M);
 
     for (Module::iterator func = M->begin(); func != M->end(); ++func){
 	    for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
