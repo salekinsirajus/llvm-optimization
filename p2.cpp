@@ -227,11 +227,41 @@ static bool shouldRemoveTrivialDeadCode(Instruction &x){
     return false;
 }
 
+static void cseOnSpecificInstruction(Instrction* I, DomTreeNodeBase<BasicBlock> * Node root){
+    for (it=root->begin(), end=root->end(); it!=end; it++){
+        bb = I->getParent();
+         
+    } 
+}
+
+static void SeparateCSEBasic(Module *M){
+
+    DominatorTreeBase<BasicBlock,false> *DT=nullptr; //dominance
+    DT = new DominatorTreeBase<BasicBlock,false>();
+
+    worklist;
+    for (Module::iterator func = M->begin(); func != M->end(); ++func){
+        Function& f = *func;
+        DT->recalculate(f); // F is Function*. Use one DominatorTreeBase and recalculate tree for each function you visit
+
+        DomTreeNodeBase<BasicBlock>::iterator it,end;
+        DomTreeNodeBase<BasicBlock> *Node = DT->getRootNode();
+
+        for(it=Node->begin(),end=Node->end(); it!=end; it++){
+            BasicBlock *bb_next = (*it)->getBlock(); // get each bb it immediately dominates
+            for (auto bb_next){
+                populate_worklist(inst, worklist);    
+                CSEBasicOnInstruction(inst, worklist);
+                worklist.empty;
+            }
+        }
+    }
+}
 
 static void runCSEBasic(Module *M){
     /**
      * Runs the Basic CSE Pass 
-    /* Also Runs a non-aggresive Dead Code Elimination Pass
+     * Also Runs a non-aggresive Dead Code Elimination Pass
      * 
      * 
      * 
@@ -254,6 +284,8 @@ static void runCSEBasic(Module *M){
      *
      *
      * */
+
+
     for (Module::iterator func = M->begin(); func != M->end(); ++func){
         for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
             for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
@@ -319,7 +351,8 @@ static void CommonSubexpressionElimination(Module *M) {
      * Runs different optimization sub-passes in a certain order
      * */
 
-    runCSEBasic(M);
+    //runCSEBasic(M);
+    SeparateCSEBasic(M);
     SimplifyInstructionPass(M);
 }
 
