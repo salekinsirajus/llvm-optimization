@@ -26,6 +26,7 @@
 
 #include "llvm/IR/InstIterator.h"
 #include "llvm/Transforms/Utils/FunctionComparator.h"
+#include "llvm/Transforms/InstCombine/InstCombiner.h"
 #include "llvm/IR/Value.h"
 
 using namespace llvm;
@@ -196,8 +197,9 @@ static bool isLiteralMatch(Instruction &a, Instruction &b){
 
         int c = a.getNumOperands() - 1;
         while (c >= 0){
-            if (a.getOperand(c)->getType() == b.getOperand(c)->getType()) {return false;}
-            if (a.getOperand(c)->getValueID() == b.getOperand(c)->getValueID()) {return false;}
+            if (a.getOperand(c) != b.getOperand(c)) {return false;}
+            //if (a.getOperand(c)->getType() == b.getOperand(c)->getType()) {return false;}
+            //if (a.getOperand(c)->getValueID() == b.getOperand(c)->getValueID()) {return false;}
             c--;
         } 
     	return true;
@@ -275,6 +277,36 @@ static void runCSEBasic(Module *M){
 }
 
 
+static void RedundantLoadWorklist(Instruction &I, BasicBlock::iterator it, Function::iterator fi){
+    Instruction* load =  &I;
+
+    /*
+    printf("=================\n");
+    printf("\nConsidering all possible redloads for instruction: \n");
+    I.print(errs());
+    printf("\n");
+    */
+
+    ++it;  // increament the iterator, so that we start considering the immediate next instruction
+    for (; it != fi->end(); ++it){
+        Instruction* next_inst = &*it;
+        next_inst->print(errs());
+        //printf("\n");
+        if (isa<LoadInst>(next_inst) && !next_inst->isVolatile()){
+            if (isLiteralMatch(I, *next_inst)){
+                next_inst->replaceAllUsesWith(load);
+
+                it = next_inst->eraseFromParent();
+                CSELdElim++;
+            }
+        } else if (isa<StoreInst>(next_inst)){
+            break; 
+        }
+    }
+    //printf("=================\n");
+
+}
+
 static bool RunSimplifyInstruction(Instruction &I, const SimplifyQuery &Q){
     /* Runs the simplifyInstruction library function
      *
@@ -299,7 +331,6 @@ static void SimplifyInstructionPass(Module *M){
     /* Runs a pass where you try do simple constant folding and such things
      *
      * */
-
     for (Module::iterator func = M->begin(); func != M->end(); ++func){
         for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
             for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
@@ -307,6 +338,23 @@ static void SimplifyInstructionPass(Module *M){
                 if (RunSimplifyInstruction(inst, M->getDataLayout())){
                     ++bbi;
                     inst.eraseFromParent();
+                }
+            }
+        }
+    }
+}
+
+static void EliminatRedundantLoadPass(Module *M){
+    /* Examines a load and eliminates redundant loads within the same basic
+     * block
+     *
+     * */
+    for (Module::iterator func = M->begin(); func != M->end(); ++func){
+        for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
+            for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
+            Instruction& inst = *bbi;
+            if (isa<LoadInst>(&inst)){
+                RedundantLoadWorklist(inst, bbi, fi);   
                 }
             }
         }
@@ -321,5 +369,5 @@ static void CommonSubexpressionElimination(Module *M) {
 
     runCSEBasic(M);
     SimplifyInstructionPass(M);
+    EliminatRedundantLoadPass(M);
 }
-
