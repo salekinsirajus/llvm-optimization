@@ -196,8 +196,9 @@ static bool isLiteralMatch(Instruction &a, Instruction &b){
 
         int c = a.getNumOperands() - 1;
         while (c >= 0){
-            if (a.getOperand(c)->getType() == b.getOperand(c)->getType()) {return false;}
-            if (a.getOperand(c)->getValueID() == b.getOperand(c)->getValueID()) {return false;}
+            if (a.getOperand(c) != b.getOperand(c)) {return false;}
+            //if (a.getOperand(c)->getType() == b.getOperand(c)->getType()) {return false;}
+            //if (a.getOperand(c)->getValueID() == b.getOperand(c)->getValueID()) {return false;}
             c--;
         } 
     	return true;
@@ -259,12 +260,57 @@ static void runCSEBasic(Module *M){
 
 }
 
+
+static std::set<Instruction*> RedundantLoadWorklist(Instruction &I, BasicBlock::iterator it, Function::iterator fi){
+    Instruction* load =  &I;
+    std::set<Instruction*> worklist; 
+
+    printf("=================\n");
+    printf("\nConsidering all possible redloads for instruction: \n");
+    I.print(errs());
+    printf("\n");
+
+
+    ++it;  // increament the iterator, so that we start considering the immediate next instruction
+    for (; it != fi->end(); ++it){
+        Instruction* next_inst = &*it;
+        next_inst->print(errs());
+        printf("\n");
+        if (isa<LoadInst>(next_inst) && !next_inst->isVolatile()){
+    //        worklist.insert(next_inst);
+            if (isLiteralMatch(I, *next_inst)){
+                next_inst->replaceAllUsesWith(load);
+
+                it = next_inst->eraseFromParent();
+                CSELdElim++;
+            }
+        } else if (isa<StoreInst>(next_inst)){
+            break; 
+        }
+    }
+    printf("=================\n");
+
+    /*
+    std::set<Instruction*>::iterator wlit;
+    for (wlit = worklist.begin(); wlit != worklist.end(); ++wlit){
+        Instruction* another_load = &*wlit;
+        if (isLiteralMatch(I, another_load){
+            (*wlit)->replaceAllUsesWith(load);
+
+            (*wlit)->eraseFromParent();
+            CSELdElim++;
+        }  
+    }*/
+
+    return worklist;
+}
+
+/*
 static bool examineIfLoadIsRedundant(Instruction &I, BasicBlock::iterator it, Function::iterator fi){
 
-    Instruction* old;
+    //Instruction* old;
     Instruction* load =  &I;
- 
-    while (it != fi->end()){
+    for (it; it != fi->end(); ++it){
         Instruction* next_inst = &*it;
         if (isa<LoadInst>(next_inst) && !next_inst->isVolatile()){
             if (I.getType() == next_inst->getType() && I.getOperand(0) == next_inst->getOperand(0)){
@@ -272,18 +318,14 @@ static bool examineIfLoadIsRedundant(Instruction &I, BasicBlock::iterator it, Fu
                 next_inst->replaceAllUsesWith(load);
                 ++it;
 
-                old = next_inst;
-                old->eraseFromParent();
+                next_inst->eraseFromParent();
                 CSELdElim++;
 
                 continue;
             }
         }
 
-        if (isa<StoreInst>(next_inst)){
-            //TODO: as soon as we see an intervening store or call to any
-            //address
-            //Stop considering I altogether 
+        else if (isa<StoreInst>(next_inst)){
             return false;
         }
 
@@ -291,25 +333,24 @@ static bool examineIfLoadIsRedundant(Instruction &I, BasicBlock::iterator it, Fu
         //next_inst =  next_inst->getNextNode();
     }
 
-    //probably does not add much value
     return true;
 }
+*/
 
 static void EliminatRedundantLoadPass(Module *M){
     /* Examines a load and eliminates redundant loads within the same basic
      * block
      *
      * */
+    std::set<Instruction*> wl;
     for (Module::iterator func = M->begin(); func != M->end(); ++func){
         for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
             for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
             Instruction& inst = *bbi;
             if (isa<LoadInst>(&inst)){
-                if (!examineIfLoadIsRedundant(inst, bbi, fi)){
-                    //if the function returns false, stop considering this load
-                    //altogether
-                    continue;
-                    }
+                                
+                wl = RedundantLoadWorklist(inst, bbi, fi);   
+                wl.clear();
                 }
             }
         }
@@ -326,25 +367,5 @@ static void CommonSubexpressionElimination(Module *M) {
 
     EliminatRedundantLoadPass(M);
 
-    for (Module::iterator func = M->begin(); func != M->end(); ++func){
-	    for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
-		    for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
-                //Check if this instruction can be ignored for CSE
-                //If not, put this somewhere in a container and compare as
-                //instructions come in. when you find a candidate, delete the second one
-                Instruction& inst = *bbi;
-                // FIXME: depending on the order of optimization, you may need
-                // to exit the loop early
-                // run DCE
-                if (shouldRemoveTrivialDeadCode(inst)){
-                    //set the iterator
-                    ++bbi;
-                    //remove this instruction
-                    inst.eraseFromParent();
-                    CSEDead++;
-                }
-	        }
-	    }
-    }
 }
 
