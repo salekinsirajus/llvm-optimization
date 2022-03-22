@@ -227,84 +227,108 @@ static bool shouldRemoveTrivialDeadCode(Instruction &x){
     return false;
 }
 
-static void cseOnSpecificInstruction(Instrction* I, DomTreeNodeBase<BasicBlock> * Node root){
-    for (it=root->begin(), end=root->end(); it!=end; it++){
-        bb = I->getParent();
-         
-    } 
+
+static void populateWorkList(std::set<Instruction *> &wl, BasicBlock *blk){
+
+      // blk is a pointer to a BasicBlock instance
+     for (BasicBlock::iterator i = blk->begin(), e = blk->end(); i != e; ++i){
+
+        Instruction& inst = *i;
+        if (!ignoreForCSE(inst)){
+            wl.insert(&inst);
+        }
+     }
+     printf("after populating\n"); 
+     printf("size of the worklist: %d\n", wl.size());
 }
+
+static void CSEOnWorkListInstructions(std::set<Instruction*> &cleanup_list){
+    std::set<Instruction*> to_remove;
+    std::set<Instruction*>::iterator inner, it;
+    printf("before working on it\n"); 
+    printf("Size of the worklist: %d\n", cleanup_list.size());
+    int i = (int) cleanup_list.size();
+    
+    for (auto i:cleanup_list){
+        i->print(errs());
+    }
+
+    //while (i > 0){
+    //    Instruction* i = *cleanup_list.begin();
+
+        //i->print(errs());
+            //if isLiteralMatch(x, y);
+            //y.replaceUsesWith(x);
+            //y.eraseFromParent();
+            //cleanup
+    //    i--;
+   // }
+}
+
+
+static void SeparateCSEBasicV2(Module *M){
+
+    DominatorTreeBase<BasicBlock,false> *DT=nullptr; //dominance
+    DT = new DominatorTreeBase<BasicBlock,false>();
+
+    std::set<Instruction*> worklist;
+    for (Module::iterator func = M->begin(); func != M->end(); ++func){
+
+        DT->recalculate(*func);
+
+            DomTreeNodeBase<BasicBlock>::iterator it,end;
+            DomTreeNodeBase<BasicBlock> *Node = DT->getRootNode();
+            
+            printf("before getting into the loop\n");
+            if (Node->begin() == Node->end()){
+                printf("same beginning and end\n");
+                continue;
+            }
+            for(it=Node->begin(),end=Node->end(); it!=end; it++){
+                populateWorkList(worklist, Node->getBlock());
+            }
+            CSEOnWorkListInstructions(worklist);
+            worklist.clear();
+    }
+}
+
 
 static void SeparateCSEBasic(Module *M){
 
     DominatorTreeBase<BasicBlock,false> *DT=nullptr; //dominance
     DT = new DominatorTreeBase<BasicBlock,false>();
 
-    worklist;
+    std::set<Instruction*> worklist;
     for (Module::iterator func = M->begin(); func != M->end(); ++func){
         Function& f = *func;
-        DT->recalculate(f); // F is Function*. Use one DominatorTreeBase and recalculate tree for each function you visit
+        
+        DT->recalculate(f);
+        if (f.begin() == f.end()){
+            printf("no basic block in this function\n");
+            continue;
+        }
 
         DomTreeNodeBase<BasicBlock>::iterator it,end;
         DomTreeNodeBase<BasicBlock> *Node = DT->getRootNode();
 
+        
         for(it=Node->begin(),end=Node->end(); it!=end; it++){
-            BasicBlock *bb_next = (*it)->getBlock(); // get each bb it immediately dominates
-            for (auto bb_next){
-                populate_worklist(inst, worklist);    
-                CSEBasicOnInstruction(inst, worklist);
-                worklist.empty;
-            }
+            //Taverse all the child of 'it'
+            //Does this return the first block or the second one?
+            //BasicBlock *child = (*it)->getBlock();
+            //while (child != Node.end()){
+                //BasicBlock *child = (*child)->getBlock(); // get each bb it immediately dominates
+                //BasicBlock *child = (*it)->getBlock(); // get each bb it immediately dominates
+                populateWorkList(worklist, Node->getBlock());
+
+            //}
+        
         }
+        CSEOnWorkListInstructions(worklist);
+        worklist.clear();
     }
 }
 
-static void runCSEBasic(Module *M){
-    /**
-     * Runs the Basic CSE Pass 
-     * Also Runs a non-aggresive Dead Code Elimination Pass
-     * 
-     * 
-     * 
-    DominatorTreeBase<BasicBlock,false> *DT=nullptr; //dominance
-    DominatorTreeBase<BasicBlock,true> *PDT=nullptr; //post-dominance
-
-    DT = new DominatorTreeBase<BasicBlock,false>();
-    PDT = new DominatorTreeBase<BasicBlock,true>();
-
-
-    DT->recalculate(*F); // F is Function*. Use one DominatorTreeBase and recalculate tree for each function you visit
-    PDT->recalculate(*F);
-
-    DomTreeNodeBase<BasicBlock> *Node = DT->getNode(bb); // get Node from some basic block*
-    DomTreeNodeBase<BasicBlock>::iterator it,end;
-    for(it=Node->begin(),end=Node->end(); it!=end; it++)
-    {
-        BasicBlock *bb_next = (*it)->getBlock(); // get each bb it immediately dominates
-    }
-     *
-     *
-     * */
-
-
-    for (Module::iterator func = M->begin(); func != M->end(); ++func){
-        for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
-            for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
-                Instruction& inst = *bbi;
-                //if (ignoreForCSE(inst)){
-
-                //FIXME: when you fully flesh out CSE, ensure proper ordering
-                //since there is no way you can run CSE on deleted instruction
-                if (shouldRemoveTrivialDeadCode(inst)){
-                    //set the iterator
-                    ++bbi;
-                    //remove this instruction
-                    inst.eraseFromParent();
-                    CSEDead++;
-                }
-            }
-        }
-    }
-}
 
 
 static bool RunSimplifyInstruction(Instruction &I, const SimplifyQuery &Q){
@@ -335,7 +359,7 @@ static void SimplifyInstructionPass(Module *M){
     for (Module::iterator func = M->begin(); func != M->end(); ++func){
         for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
             for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
-                Instruction& inst = *bbi;
+               Instruction& inst = *bbi;
                 if (RunSimplifyInstruction(inst, M->getDataLayout())){
                     ++bbi;
                     inst.eraseFromParent();
@@ -352,7 +376,6 @@ static void CommonSubexpressionElimination(Module *M) {
      * */
 
     //runCSEBasic(M);
-    SeparateCSEBasic(M);
-    SimplifyInstructionPass(M);
+    SeparateCSEBasicV2(M);
 }
 
