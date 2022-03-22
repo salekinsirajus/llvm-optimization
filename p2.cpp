@@ -382,7 +382,7 @@ static void RedundantStoreWorklist(Instruction &I, BasicBlock::iterator it, Func
                ){
                 it = store->eraseFromParent();
                 //NOTE: REALLY IMPORT. Will get segfault otherwise
-                
+                CSEStElim++;  
                 return false;
             }
        } 
@@ -413,6 +413,9 @@ static void CommonSubexpressionElimination(Module *M) {
      * 
      * Runs different optimization sub-passes in a certain order
      * */
+// for autograder
+CSEElim = 0;
+CSEStElim = 0;
 
     runCSEBasic(M);
     SimplifyInstructionPass(M);
