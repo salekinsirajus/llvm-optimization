@@ -261,23 +261,22 @@ static void runCSEBasic(Module *M){
 }
 
 
-static std::set<Instruction*> RedundantLoadWorklist(Instruction &I, BasicBlock::iterator it, Function::iterator fi){
+static void RedundantLoadWorklist(Instruction &I, BasicBlock::iterator it, Function::iterator fi){
     Instruction* load =  &I;
-    std::set<Instruction*> worklist; 
 
+    /*
     printf("=================\n");
     printf("\nConsidering all possible redloads for instruction: \n");
     I.print(errs());
     printf("\n");
-
+    */
 
     ++it;  // increament the iterator, so that we start considering the immediate next instruction
     for (; it != fi->end(); ++it){
         Instruction* next_inst = &*it;
         next_inst->print(errs());
-        printf("\n");
+        //printf("\n");
         if (isa<LoadInst>(next_inst) && !next_inst->isVolatile()){
-    //        worklist.insert(next_inst);
             if (isLiteralMatch(I, *next_inst)){
                 next_inst->replaceAllUsesWith(load);
 
@@ -288,84 +287,27 @@ static std::set<Instruction*> RedundantLoadWorklist(Instruction &I, BasicBlock::
             break; 
         }
     }
-    printf("=================\n");
+    //printf("=================\n");
 
-    /*
-    std::set<Instruction*>::iterator wlit;
-    for (wlit = worklist.begin(); wlit != worklist.end(); ++wlit){
-        Instruction* another_load = &*wlit;
-        if (isLiteralMatch(I, another_load){
-            (*wlit)->replaceAllUsesWith(load);
-
-            (*wlit)->eraseFromParent();
-            CSELdElim++;
-        }  
-    }*/
-
-    return worklist;
 }
 
-/*
-static bool examineIfLoadIsRedundant(Instruction &I, BasicBlock::iterator it, Function::iterator fi){
-
-    //Instruction* old;
-    Instruction* load =  &I;
-    for (it; it != fi->end(); ++it){
-        Instruction* next_inst = &*it;
-        if (isa<LoadInst>(next_inst) && !next_inst->isVolatile()){
-            if (I.getType() == next_inst->getType() && I.getOperand(0) == next_inst->getOperand(0)){
-
-                next_inst->replaceAllUsesWith(load);
-                ++it;
-
-                next_inst->eraseFromParent();
-                CSELdElim++;
-
-                continue;
-            }
-        }
-
-        else if (isa<StoreInst>(next_inst)){
-            return false;
-        }
-
-        ++it;
-        //next_inst =  next_inst->getNextNode();
-    }
-
-    return true;
-}
-*/
 
 static void EliminatRedundantLoadPass(Module *M){
     /* Examines a load and eliminates redundant loads within the same basic
      * block
      *
      * */
-    std::set<Instruction*> wl;
     for (Module::iterator func = M->begin(); func != M->end(); ++func){
         for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
             for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
             Instruction& inst = *bbi;
             if (isa<LoadInst>(&inst)){
-                                
-                wl = RedundantLoadWorklist(inst, bbi, fi);   
-                wl.clear();
+                RedundantLoadWorklist(inst, bbi, fi);   
                 }
             }
         }
     }
 }
 static void CommonSubexpressionElimination(Module *M) {
-
-    // Start with the simplest module: one basic block
-
-    // Iterate over basic blocks
-    //    Iteratve over instructions in basic blocks
-    //    FIXME: the following way of iterating might cause trouble when you delete
-    //    instruction from the iterator
-
     EliminatRedundantLoadPass(M);
-
 }
-
