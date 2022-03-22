@@ -414,8 +414,8 @@ static void CommonSubexpressionElimination(Module *M) {
      * Runs different optimization sub-passes in a certain order
      * */
 
-//    runCSEBasic(M);
-//    SimplifyInstructionPass(M);
-//    EliminatRedundantLoadPass(M);
+    runCSEBasic(M);
+    SimplifyInstructionPass(M);
+    EliminatRedundantLoadPass(M);
     EliminateLoadAndStorePass(M);
 }
