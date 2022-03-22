@@ -31,7 +31,6 @@
 
 using namespace llvm;
 
-
 static void CommonSubexpressionElimination(Module *);
 
 static void summarize(Module *M);
@@ -233,7 +232,7 @@ static bool shouldRemoveTrivialDeadCode(Instruction &x){
 static void runCSEBasic(Module *M){
     /**
      * Runs the Basic CSE Pass 
-    /* Also Runs a non-aggresive Dead Code Elimination Pass
+     * Also Runs a non-aggresive Dead Code Elimination Pass
      * 
      * 
      * 
@@ -280,18 +279,10 @@ static void runCSEBasic(Module *M){
 static void RedundantLoadWorklist(Instruction &I, BasicBlock::iterator it, Function::iterator fi){
     Instruction* load =  &I;
 
-    /*
-    printf("=================\n");
-    printf("\nConsidering all possible redloads for instruction: \n");
-    I.print(errs());
-    printf("\n");
-    */
-
-    ++it;  // increament the iterator, so that we start considering the immediate next instruction
+    ++it; 
     for (; it != fi->end(); ++it){
         Instruction* next_inst = &*it;
-        next_inst->print(errs());
-        //printf("\n");
+
         if (isa<LoadInst>(next_inst) && !next_inst->isVolatile()){
             if (isLiteralMatch(I, *next_inst)){
                 next_inst->replaceAllUsesWith(load);
@@ -303,7 +294,6 @@ static void RedundantLoadWorklist(Instruction &I, BasicBlock::iterator it, Funct
             break; 
         }
     }
-    //printf("=================\n");
 
 }
 
@@ -353,6 +343,7 @@ static void EliminatRedundantLoadPass(Module *M){
         for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
             for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
             Instruction& inst = *bbi;
+
             if (isa<StoreInst>(&inst)){
                 RedundantLoadWorklist(inst, bbi, fi);   
                 }
@@ -365,41 +356,56 @@ static void EliminatRedundantLoadPass(Module *M){
 static void RedundantStoreWorklist(Instruction &I, BasicBlock::iterator it, Function::iterator fi){
     Instruction* store =  &I; //S
 
+
     ++it;  // increament the iterator, so that we start considering the immediate next instruction
     for (; it != fi->end(); ++it){
         Instruction* next_inst = &*it;  //R
-        next_inst->print(errs());
 
-        //if R is a load && R is not volatile 
         if (isa<LoadInst>(next_inst) && !next_inst->isVolatile()){
-            //and Rs load address is the same as S and TypeOf(R)==TypeOf(S's value operand):
-            //FIXME: is this the load addres at position 0?
-            if (next_inst->getOperand(0) == I) && (I.){
-                next_inst->replaceAllUsesWith(store);
+            if ((next_inst->getOperand(0) == store) &&
+                (next_inst->getType() == store->getOperand(0)->getType())
+                ){
 
+                next_inst->replaceAllUsesWith(store->getOperand(0));
                 it = next_inst->eraseFromParent();
-                CSELdElim++;
+                CSEStore2Load++;
+                //continue;
             }
-        } else if (isa<StoreInst>(next_inst)){
-            break; 
-        }
+        //if R is a store && R is storing to the same address && S is not volatile && R and S value operands are the same type:
+        } 
+        
+/*
+        else if (isa<StoreInst>(next_inst) && !store->isVolatile()){
+            printf("No error in second condition\n");
+            if (next_inst->getOperand(0) == store->getOperand(0) &&
+                next_inst->getOperand(0)->getType() == store->getOperand(0)->getType()
+               ){
+                it = store->eraseFromParent();
+                //NOTE: REALLY IMPORT. Will get segfault otherwise
+                
+                return false;
+            }
+       } 
+*/
+        //if R is a load or a store (or any instruction with a side-effect):
+        else if (isa<StoreInst>(next_inst) || isa<LoadInst>(next_inst) ||
+                next_inst->mayHaveSideEffects()){
+            return;  // Stop considering this
+        } 
     }
-    //printf("=================\n");
-
 }
 
-static void EliminateLoadAndStorePassa(Module *M){
+static void EliminateLoadAndStorePass(Module *M){
     for (Module::iterator func = M->begin(); func != M->end(); ++func){
         for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
             for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
-            Instruction& inst = *bbi;
-            if (isa<StoreInst>(&inst)){
-                RedundantStoreWorklist(inst, bbi, fi);   
+                Instruction& inst = *bbi;
+                if (isa<StoreInst>(&inst)){
+                    RedundantStoreWorklist(inst, bbi, fi);
                 }
             }
         }
     }
-
 }
 
 static void CommonSubexpressionElimination(Module *M) {
@@ -408,8 +414,8 @@ static void CommonSubexpressionElimination(Module *M) {
      * Runs different optimization sub-passes in a certain order
      * */
 
-    runCSEBasic(M);
-    SimplifyInstructionPass(M);
-    EliminatRedundantLoadPass(M);
+//    runCSEBasic(M);
+//    SimplifyInstructionPass(M);
+//    EliminatRedundantLoadPass(M);
     EliminateLoadAndStorePass(M);
 }
