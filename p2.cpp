@@ -196,8 +196,9 @@ static bool isLiteralMatch(Instruction &a, Instruction &b){
 
         int c = a.getNumOperands() - 1;
         while (c >= 0){
-            if (a.getOperand(c)->getType() == b.getOperand(c)->getType()) {return false;}
-            if (a.getOperand(c)->getValueID() == b.getOperand(c)->getValueID()) {return false;}
+            if (a.getOperand(c) != b.getOperand(c)) {return false;}
+            //if (a.getOperand(c)->getType() == b.getOperand(c)->getType()) {return false;}
+            //if (a.getOperand(c)->getValueID() == b.getOperand(c)->getValueID()) {return false;}
             c--;
         } 
     	return true;
@@ -205,7 +206,6 @@ static bool isLiteralMatch(Instruction &a, Instruction &b){
     
     return false;
 } 
-
 
 static bool shouldRemoveTrivialDeadCode(Instruction &x){
     /* Similar to isTriviallyDeadInstruction
@@ -238,19 +238,30 @@ static void populateWorkList(std::set<Instruction *> &wl, BasicBlock *blk){
             wl.insert(&inst);
         }
      }
-     printf("after populating\n"); 
-     printf("size of the worklist: %d\n", wl.size());
 }
 
 static void CSEOnWorkListInstructions(std::set<Instruction*> &cleanup_list){
-    std::set<Instruction*> to_remove;
     std::set<Instruction*>::iterator inner, it;
-    printf("before working on it\n"); 
-    printf("Size of the worklist: %d\n", cleanup_list.size());
-    int i = (int) cleanup_list.size();
-    
-    for (auto i:cleanup_list){
-        i->print(errs());
+
+    for (it=cleanup_list.begin(); it != cleanup_list.end(); ++it){
+        Instruction* a = *it;  
+        for (inner = it; inner != cleanup_list.end(); ++inner){
+            if (it == inner) {continue;}   // idk how to start from the next item 
+             
+            Instruction* b = *inner;  
+        
+            printf("\n############# PAIR IN COSIDERATION ###############\n");
+            a->print(errs());
+            b->print(errs());
+            if (isLiteralMatch(*a, *b)){
+                b->replaceAllUsesWith(a);
+                printf("\nReplaced second's uses with first\n");
+                printf("Basic Block After\n");
+                a->getParent()->print(errs());
+                b->eraseFromParent(); 
+            }
+            printf("\n##################################################\n");
+        }
     }
 
     //while (i > 0){
@@ -274,21 +285,36 @@ static void SeparateCSEBasicV2(Module *M){
     std::set<Instruction*> worklist;
     for (Module::iterator func = M->begin(); func != M->end(); ++func){
 
+        printf("recalculating Dominator Tree for Function\n");
+        func->print(errs()); 
         DT->recalculate(*func);
+        for (Function::iterator bb = func->begin(); bb != func->end(); ++bb){
 
+            printf("======Beginning one iteration of a function====\n");
             DomTreeNodeBase<BasicBlock>::iterator it,end;
             DomTreeNodeBase<BasicBlock> *Node = DT->getRootNode();
-            
-            printf("before getting into the loop\n");
-            if (Node->begin() == Node->end()){
-                printf("same beginning and end\n");
-                continue;
+            //DomTreeNodeBase<BasicBlock> *Node = DT->getNode(bb);
+       
+            SmallVector<BasicBlock *, 20> Descendants;
+            DT->getDescendants(&*bb, Descendants);
+
+            if (Descendants.size() == 0) {
+                printf("No descendants for this basic block\n");
             }
-            for(it=Node->begin(),end=Node->end(); it!=end; it++){
-                populateWorkList(worklist, Node->getBlock());
+            for (BasicBlock *DescendBB : Descendants) {
+                printf("Examining this bb in the graph: \n");
+                DescendBB->print(errs());
+                populateWorkList(worklist, DescendBB);
+                printf("size of worklist after populating with bb: %d\n", worklist.size());
             }
+
+            printf("Collected all the instruction in all the dominated bb\n");
             CSEOnWorkListInstructions(worklist);
+            printf("About to clear the worklist\n");
             worklist.clear();
+            printf("Emptied out the worklist. Size: %d\n", worklist.size());
+            printf("======finished one iteration of a function====\n");
+        }
     }
 }
 
@@ -369,6 +395,13 @@ static void SimplifyInstructionPass(Module *M){
     }
 }
 
+static void printModule(Module *M){
+    printf("-------------END OF PASS---------------\n");
+    for (Module::iterator func = M->begin(); func != M->end(); ++func){
+        func->print(errs());
+    }
+}
+
 static void CommonSubexpressionElimination(Module *M) {
     /* Driver function
      * 
@@ -377,5 +410,6 @@ static void CommonSubexpressionElimination(Module *M) {
 
     //runCSEBasic(M);
     SeparateCSEBasicV2(M);
+    printModule(M);
 }
 
