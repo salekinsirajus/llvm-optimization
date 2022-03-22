@@ -353,12 +353,53 @@ static void EliminatRedundantLoadPass(Module *M){
         for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
             for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
             Instruction& inst = *bbi;
-            if (isa<LoadInst>(&inst)){
+            if (isa<StoreInst>(&inst)){
                 RedundantLoadWorklist(inst, bbi, fi);   
                 }
             }
         }
     }
+}
+
+
+static void RedundantStoreWorklist(Instruction &I, BasicBlock::iterator it, Function::iterator fi){
+    Instruction* store =  &I; //S
+
+    ++it;  // increament the iterator, so that we start considering the immediate next instruction
+    for (; it != fi->end(); ++it){
+        Instruction* next_inst = &*it;  //R
+        next_inst->print(errs());
+
+        //if R is a load && R is not volatile 
+        if (isa<LoadInst>(next_inst) && !next_inst->isVolatile()){
+            //and Rs load address is the same as S and TypeOf(R)==TypeOf(S's value operand):
+            //FIXME: is this the load addres at position 0?
+            if (next_inst->getOperand(0) == I) && (I.){
+                next_inst->replaceAllUsesWith(store);
+
+                it = next_inst->eraseFromParent();
+                CSELdElim++;
+            }
+        } else if (isa<StoreInst>(next_inst)){
+            break; 
+        }
+    }
+    //printf("=================\n");
+
+}
+
+static void EliminateLoadAndStorePassa(Module *M){
+    for (Module::iterator func = M->begin(); func != M->end(); ++func){
+        for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
+            for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
+            Instruction& inst = *bbi;
+            if (isa<StoreInst>(&inst)){
+                RedundantStoreWorklist(inst, bbi, fi);   
+                }
+            }
+        }
+    }
+
 }
 
 static void CommonSubexpressionElimination(Module *M) {
@@ -370,4 +411,5 @@ static void CommonSubexpressionElimination(Module *M) {
     runCSEBasic(M);
     SimplifyInstructionPass(M);
     EliminatRedundantLoadPass(M);
+    EliminateLoadAndStorePass(M);
 }
