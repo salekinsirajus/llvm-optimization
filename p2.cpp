@@ -27,6 +27,7 @@
 #include "llvm/IR/InstIterator.h"
 #include "llvm/Transforms/Utils/FunctionComparator.h"
 #include "llvm/Transforms/InstCombine/InstCombiner.h"
+#include "llvm/IR/Value.h"
 
 using namespace llvm;
 
@@ -207,6 +208,7 @@ static bool isLiteralMatch(Instruction &a, Instruction &b){
     return false;
 } 
 
+
 static bool shouldRemoveTrivialDeadCode(Instruction &x){
     /* Similar to isTriviallyDeadInstruction
      *
@@ -227,9 +229,14 @@ static bool shouldRemoveTrivialDeadCode(Instruction &x){
     return false;
 }
 
+
 static void runCSEBasic(Module *M){
     /**
-     *
+     * Runs the Basic CSE Pass 
+    /* Also Runs a non-aggresive Dead Code Elimination Pass
+     * 
+     * 
+     * 
     DominatorTreeBase<BasicBlock,false> *DT=nullptr; //dominance
     DominatorTreeBase<BasicBlock,true> *PDT=nullptr; //post-dominance
 
@@ -252,12 +259,21 @@ static void runCSEBasic(Module *M){
     for (Module::iterator func = M->begin(); func != M->end(); ++func){
         for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
             for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
-            Instruction& inst = *bbi;
-            //if (ignoreForCSE(inst)){
+                Instruction& inst = *bbi;
+                //if (ignoreForCSE(inst)){
+
+                //FIXME: when you fully flesh out CSE, ensure proper ordering
+                //since there is no way you can run CSE on deleted instruction
+                if (shouldRemoveTrivialDeadCode(inst)){
+                    //set the iterator
+                    ++bbi;
+                    //remove this instruction
+                    inst.eraseFromParent();
+                    CSEDead++;
+                }
             }
         }
     }
-
 }
 
 
@@ -291,6 +307,42 @@ static void RedundantLoadWorklist(Instruction &I, BasicBlock::iterator it, Funct
 
 }
 
+static bool RunSimplifyInstruction(Instruction &I, const SimplifyQuery &Q){
+    /* Runs the simplifyInstruction library function
+     *
+     * If any simplification was achieved, it replaces the uses of this value
+     * */
+
+    Instruction *k;
+    k = &I;
+    Value* result = SimplifyInstruction(k, Q);
+    
+    if (result != nullptr) {
+        //replace uses with result
+        k->replaceAllUsesWith(result);
+        CSESimplify++;
+        return true;
+    }
+    //leave it be
+    return false;
+}
+
+static void SimplifyInstructionPass(Module *M){
+    /* Runs a pass where you try do simple constant folding and such things
+     *
+     * */
+    for (Module::iterator func = M->begin(); func != M->end(); ++func){
+        for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
+            for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
+                Instruction& inst = *bbi;
+                if (RunSimplifyInstruction(inst, M->getDataLayout())){
+                    ++bbi;
+                    inst.eraseFromParent();
+                }
+            }
+        }
+    }
+}
 
 static void EliminatRedundantLoadPass(Module *M){
     /* Examines a load and eliminates redundant loads within the same basic
@@ -308,6 +360,14 @@ static void EliminatRedundantLoadPass(Module *M){
         }
     }
 }
+
 static void CommonSubexpressionElimination(Module *M) {
+    /* Driver function
+     * 
+     * Runs different optimization sub-passes in a certain order
+     * */
+
+    runCSEBasic(M);
+    SimplifyInstructionPass(M);
     EliminatRedundantLoadPass(M);
 }
