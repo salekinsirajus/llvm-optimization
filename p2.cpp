@@ -170,18 +170,65 @@ static llvm::Statistic CSEStElim = {"", "CSEStElim", "CSE redundant stores"};
 
 
 static bool ignoreForCSE(Instruction &I){
-    /* Instruction is not a good candidate for CSE if they are of the following
-     * type: Loads, Stores, Terminators, VAArg, Calls, Allocas, and FCmps
-     */
-    if (isa<LoadInst>(&I) || isa<StoreInst>(&I) ||
-        isa<AllocaInst>(&I) || isa<FCmpInst>(&I) ||
-        isa<CallInst>(&I) || isa<VAArgInst>(&I)  ||
-        I.isTerminator()
-       ){
-        return true;
-    }
 
-    return false; 
+    int opcode = I.getOpcode();
+    switch(opcode){
+        case Instruction::Add:
+        case Instruction::FNeg:
+        case Instruction::FAdd:
+        case Instruction::Sub:
+        case Instruction::FSub:
+        case Instruction::Mul:
+        case Instruction::FMul:
+        case Instruction::UDiv:
+        case Instruction::SDiv:
+        case Instruction::FDiv:
+        case Instruction::URem:
+        case Instruction::SRem:
+        case Instruction::FRem:
+        case Instruction::Shl:
+        case Instruction::LShr:
+        case Instruction::AShr:
+        case Instruction::And:
+        case Instruction::Or:
+        case Instruction::Xor:
+
+        case Instruction::GetElementPtr:
+        case Instruction::Trunc:
+        case Instruction::ZExt:
+        case Instruction::SExt:
+        case Instruction::FPToUI:
+        case Instruction::FPToSI:
+        case Instruction::UIToFP:
+        case Instruction::SIToFP:
+        case Instruction::FPTrunc:
+        case Instruction::FPExt:
+        case Instruction::PtrToInt:
+        case Instruction::IntToPtr:
+        case Instruction::BitCast:
+        case Instruction::AddrSpaceCast:
+        case Instruction::ICmp:
+
+        case Instruction::PHI:
+        case Instruction::Select:
+        case Instruction::ExtractElement:
+        case Instruction::InsertElement:
+        case Instruction::ShuffleVector:
+        case Instruction::ExtractValue:
+        case Instruction::InsertValue:
+            return true; // dead, but this is not enough
+
+        case Instruction::Load:
+        {
+            LoadInst *li = dyn_cast<LoadInst>(&I);
+            if (li && li->isVolatile())
+                return false;
+            return true;
+        }
+        default:
+            // any other opcode fails
+            return false;
+    }
 }
 
 static bool isLiteralMatch(Instruction &a, Instruction &b){
@@ -265,6 +312,55 @@ static void CSEOnWorkListInstructions(std::set<Instruction*> &cleanup_list){
     }
 }
 
+static bool recurse(DominatorTree *tree, DomTreeNode *root){
+    DomTreeNode::iterator it;
+    std::set<Instruction*> worklist;
+
+    /*
+    if (root->isLeaf()){
+        return true;
+    }*/
+    /*
+    for (auto c: root->children()){
+        c->getBlock();
+    }
+    */
+    
+}
+
+static void SeparateCSEBasicV3(Module *M){
+    /* for all functions in a module
+     *  for the first bb in a function
+     *      calculate dominator tree(bb)
+     *      //since root node's domtree contains all the bb's in a function 
+     *          recurse(root=bb)
+     *
+     * recurse(root){
+     *  for each children of root
+     *      if root=child{
+     *          populate_worklis(root)
+     *          runCSE()
+     *          return true; //done 
+     *      }
+     *      populate_worklis(root)
+     *      populate_worklist(child)
+     *      runCSE()
+     *      
+     *      return recurse(child)
+     * }
+     * */
+
+    for (Module::iterator func = M->begin(); func != M->end(); ++func){
+        for (Function::iterator bb = func->begin(); bb != func->end(); ++bb){
+            DominatorTree *DT = nullptr;
+            DT = new DominatorTree(*func);
+            DomTreeNode *Node = DT->getRootNode(); 
+
+            recurse(DT, Node);
+        }
+    }
+
+}
 
 static void SeparateCSEBasicV2(Module *M){
 
@@ -298,13 +394,13 @@ static void SeparateCSEBasicV2(Module *M){
             for (BasicBlock *DescendBB : Descendants) {
                 if (DT->dominates(Node->getBlock(), DescendBB)){
                     populateWorkList(worklist, DescendBB);
-                    CSEOnWorkListInstructions(worklist);
-                    worklist.clear();
                 }
                 else {
                     printf("descendant does not dominate!\n");
                 }
             }
+            CSEOnWorkListInstructions(worklist);
+            worklist.clear();
 
             //printf("Collected all the instruction in all the dominated bb\n");
             //printf("About to clear the worklist\n");
@@ -367,7 +463,7 @@ static void CommonSubexpressionElimination(Module *M) {
      * */
 
     //runCSEBasic(M);
-    SeparateCSEBasicV2(M);
+    SeparateCSEBasicV3(M);
     //printModule(M);
 }
 
