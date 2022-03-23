@@ -344,7 +344,7 @@ static void EliminatRedundantLoadPass(Module *M){
             for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
             Instruction& inst = *bbi;
 
-            if (isa<StoreInst>(&inst)){
+            if (isa<LoadInst>(&inst)){
                 RedundantLoadWorklist(inst, bbi, fi);   
                 }
             }
