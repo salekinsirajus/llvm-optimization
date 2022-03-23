@@ -197,8 +197,6 @@ static bool isLiteralMatch(Instruction &a, Instruction &b){
         int c = a.getNumOperands() - 1;
         while (c >= 0){
             if (a.getOperand(c) != b.getOperand(c)) {return false;}
-            //if (a.getOperand(c)->getType() == b.getOperand(c)->getType()) {return false;}
-            //if (a.getOperand(c)->getValueID() == b.getOperand(c)->getValueID()) {return false;}
             c--;
         } 
     	return true;
@@ -234,35 +232,12 @@ static void runCSEBasic(Module *M){
      * Runs the Basic CSE Pass 
      * Also Runs a non-aggresive Dead Code Elimination Pass
      * 
-     * 
-     * 
-    DominatorTreeBase<BasicBlock,false> *DT=nullptr; //dominance
-    DominatorTreeBase<BasicBlock,true> *PDT=nullptr; //post-dominance
-
-    DT = new DominatorTreeBase<BasicBlock,false>();
-    PDT = new DominatorTreeBase<BasicBlock,true>();
-
-
-    DT->recalculate(*F); // F is Function*. Use one DominatorTreeBase and recalculate tree for each function you visit
-    PDT->recalculate(*F);
-
-    DomTreeNodeBase<BasicBlock> *Node = DT->getNode(bb); // get Node from some basic block*
-    DomTreeNodeBase<BasicBlock>::iterator it,end;
-    for(it=Node->begin(),end=Node->end(); it!=end; it++)
-    {
-        BasicBlock *bb_next = (*it)->getBlock(); // get each bb it immediately dominates
-    }
-     *
-     *
      * */
     for (Module::iterator func = M->begin(); func != M->end(); ++func){
         for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
             for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
                 Instruction& inst = *bbi;
-                //if (ignoreForCSE(inst)){
 
-                //FIXME: when you fully flesh out CSE, ensure proper ordering
-                //since there is no way you can run CSE on deleted instruction
                 if (shouldRemoveTrivialDeadCode(inst)){
                     //set the iterator
                     ++bbi;
@@ -276,7 +251,7 @@ static void runCSEBasic(Module *M){
 }
 
 
-static void RedundantLoadWorklist(Instruction &I, BasicBlock::iterator it, Function::iterator fi){
+static void RemoveRedundantLoadAferLoad(Instruction &I, BasicBlock::iterator it, Function::iterator fi){
     Instruction* load =  &I;
 
     ++it; 
@@ -345,7 +320,7 @@ static void EliminatRedundantLoadPass(Module *M){
             Instruction& inst = *bbi;
 
             if (isa<LoadInst>(&inst)){
-                RedundantLoadWorklist(inst, bbi, fi);   
+                RemoveRedundantLoadAferLoad(inst, bbi, fi);   
                 }
             }
         }
@@ -353,7 +328,7 @@ static void EliminatRedundantLoadPass(Module *M){
 }
 
 
-static void RedundantStoreWorklist(Instruction &I, BasicBlock::iterator it, Function::iterator fi){
+static void RemoveRedundantStoreAndLoadAfterStore(Instruction &I, BasicBlock::iterator it, Function::iterator fi){
     Instruction* store =  &I; //S
 
 
@@ -369,11 +344,10 @@ static void RedundantStoreWorklist(Instruction &I, BasicBlock::iterator it, Func
                 next_inst->replaceAllUsesWith(store->getOperand(0));
                 it = next_inst->eraseFromParent();
                 CSEStore2Load++;
-                //continue;
+
             }
-        //if R is a store && R is storing to the same address && S is not volatile && R and S value operands are the same type:
-        } 
-        
+
+        }         
 /*
         else if (isa<StoreInst>(next_inst) && !store->isVolatile()){
             printf("No error in second condition\n");
@@ -396,12 +370,15 @@ static void RedundantStoreWorklist(Instruction &I, BasicBlock::iterator it, Func
 }
 
 static void EliminateLoadAndStorePass(Module *M){
+    /* Implements the Eliminate Redundant Stores and Loads Optimization
+     *
+     * */
     for (Module::iterator func = M->begin(); func != M->end(); ++func){
         for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
             for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
                 Instruction& inst = *bbi;
                 if (isa<StoreInst>(&inst)){
-                    RedundantStoreWorklist(inst, bbi, fi);
+                    RemoveRedundantStoreAndLoadAfterStore(inst, bbi, fi);
                 }
             }
         }
@@ -413,9 +390,9 @@ static void CommonSubexpressionElimination(Module *M) {
      * 
      * Runs different optimization sub-passes in a certain order
      * */
-// for autograder
-CSEElim = 0;
-CSEStElim = 0;
+    // for autograder
+    CSEElim = 0;
+    CSEStElim = 0;
 
     runCSEBasic(M);
     SimplifyInstructionPass(M);
