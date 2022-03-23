@@ -201,6 +201,7 @@ static bool isLiteralMatch(Instruction &a, Instruction &b){
             //if (a.getOperand(c)->getValueID() == b.getOperand(c)->getValueID()) {return false;}
             c--;
         } 
+
     	return true;
     }
     
@@ -250,30 +251,17 @@ static void CSEOnWorkListInstructions(std::set<Instruction*> &cleanup_list){
              
             Instruction* b = *inner;  
         
-            printf("\n############# PAIR IN COSIDERATION ###############\n");
-            a->print(errs());
-            b->print(errs());
+            //printf("\n############# PAIR IN COSIDERATION ###############\n");
             if (isLiteralMatch(*a, *b)){
                 b->replaceAllUsesWith(a);
-                printf("\nReplaced second's uses with first\n");
-                printf("Basic Block After\n");
-                a->getParent()->print(errs());
+            //    printf("\nReplaced second's uses with first\n");
+            //    printf("Basic Block After\n");
+            //    a->getParent()->print(errs());
                 b->eraseFromParent(); 
             }
-            printf("\n##################################################\n");
+            //printf("\n##################################################\n");
         }
     }
-
-    //while (i > 0){
-    //    Instruction* i = *cleanup_list.begin();
-
-        //i->print(errs());
-            //if isLiteralMatch(x, y);
-            //y.replaceUsesWith(x);
-            //y.eraseFromParent();
-            //cleanup
-    //    i--;
-   // }
 }
 
 
@@ -285,12 +273,12 @@ static void SeparateCSEBasicV2(Module *M){
     std::set<Instruction*> worklist;
     for (Module::iterator func = M->begin(); func != M->end(); ++func){
 
-        printf("recalculating Dominator Tree for Function\n");
-        func->print(errs()); 
+        //printf("recalculating Dominator Tree for Function\n");
+        //func->print(errs()); 
         DT->recalculate(*func);
         for (Function::iterator bb = func->begin(); bb != func->end(); ++bb){
 
-            printf("======Beginning one iteration of a function====\n");
+            //printf("======Beginning one iteration of a function====\n");
             DomTreeNodeBase<BasicBlock>::iterator it,end;
             DomTreeNodeBase<BasicBlock> *Node = DT->getRootNode();
             //DomTreeNodeBase<BasicBlock> *Node = DT->getNode(bb);
@@ -299,62 +287,24 @@ static void SeparateCSEBasicV2(Module *M){
             DT->getDescendants(&*bb, Descendants);
 
             if (Descendants.size() == 0) {
-                printf("No descendants for this basic block\n");
+            //    printf("No descendants for this basic block\n");
             }
             for (BasicBlock *DescendBB : Descendants) {
-                printf("Examining this bb in the graph: \n");
-                DescendBB->print(errs());
+            //    printf("Examining this bb in the graph: \n");
+            //    DescendBB->print(errs());
                 populateWorkList(worklist, DescendBB);
-                printf("size of worklist after populating with bb: %d\n", worklist.size());
+            //    printf("size of worklist after populating with bb: %d\n", worklist.size());
             }
 
-            printf("Collected all the instruction in all the dominated bb\n");
+            //printf("Collected all the instruction in all the dominated bb\n");
             CSEOnWorkListInstructions(worklist);
-            printf("About to clear the worklist\n");
+            //printf("About to clear the worklist\n");
             worklist.clear();
-            printf("Emptied out the worklist. Size: %d\n", worklist.size());
-            printf("======finished one iteration of a function====\n");
+            //printf("Emptied out the worklist. Size: %d\n", worklist.size());
+            //printf("======finished one iteration of a function====\n");
         }
     }
 }
-
-
-static void SeparateCSEBasic(Module *M){
-
-    DominatorTreeBase<BasicBlock,false> *DT=nullptr; //dominance
-    DT = new DominatorTreeBase<BasicBlock,false>();
-
-    std::set<Instruction*> worklist;
-    for (Module::iterator func = M->begin(); func != M->end(); ++func){
-        Function& f = *func;
-        
-        DT->recalculate(f);
-        if (f.begin() == f.end()){
-            printf("no basic block in this function\n");
-            continue;
-        }
-
-        DomTreeNodeBase<BasicBlock>::iterator it,end;
-        DomTreeNodeBase<BasicBlock> *Node = DT->getRootNode();
-
-        
-        for(it=Node->begin(),end=Node->end(); it!=end; it++){
-            //Taverse all the child of 'it'
-            //Does this return the first block or the second one?
-            //BasicBlock *child = (*it)->getBlock();
-            //while (child != Node.end()){
-                //BasicBlock *child = (*child)->getBlock(); // get each bb it immediately dominates
-                //BasicBlock *child = (*it)->getBlock(); // get each bb it immediately dominates
-                populateWorkList(worklist, Node->getBlock());
-
-            //}
-        
-        }
-        CSEOnWorkListInstructions(worklist);
-        worklist.clear();
-    }
-}
-
 
 
 static bool RunSimplifyInstruction(Instruction &I, const SimplifyQuery &Q){
@@ -410,6 +360,6 @@ static void CommonSubexpressionElimination(Module *M) {
 
     //runCSEBasic(M);
     SeparateCSEBasicV2(M);
-    printModule(M);
+    //printModule(M);
 }
 
