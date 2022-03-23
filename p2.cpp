@@ -26,6 +26,7 @@
 
 #include "llvm/IR/InstIterator.h"
 #include "llvm/Transforms/Utils/FunctionComparator.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/IR/Value.h"
 
 using namespace llvm;
@@ -202,6 +203,8 @@ static bool isLiteralMatch(Instruction &a, Instruction &b){
             c--;
         } 
 
+        //a.print(errs());
+        //b.print(errs());
     	return true;
     }
     
@@ -241,7 +244,7 @@ static void populateWorkList(std::set<Instruction *> &wl, BasicBlock *blk){
      }
 }
 
-static void CSEOnWorkListInstructions(std::set<Instruction*> &cleanup_list){
+static void CSEOnWorkListInstructions(std::set<Instruction*> &cleanup_list){ 
     std::set<Instruction*>::iterator inner, it;
 
     for (it=cleanup_list.begin(); it != cleanup_list.end(); ++it){
@@ -254,6 +257,7 @@ static void CSEOnWorkListInstructions(std::set<Instruction*> &cleanup_list){
             //printf("\n############# PAIR IN COSIDERATION ###############\n");
             if (isLiteralMatch(*a, *b)){
                 b->replaceAllUsesWith(a);
+                //replaceDominatedUsesWith(a, b, 
             //    printf("\nReplaced second's uses with first\n");
             //    printf("Basic Block After\n");
             //    a->getParent()->print(errs());
@@ -276,7 +280,13 @@ static void SeparateCSEBasicV2(Module *M){
 
         //printf("recalculating Dominator Tree for Function\n");
         //func->print(errs()); 
+        if (func->begin() == func->end()){
+            //no basic block in this function
+            //TODO: opportunity for optmization
+            continue;
+        }
         DT->recalculate(*func);
+
         for (Function::iterator bb = func->begin(); bb != func->end(); ++bb){
 
             //printf("======Beginning one iteration of a function====\n");
@@ -284,17 +294,16 @@ static void SeparateCSEBasicV2(Module *M){
             DomTreeNodeBase<BasicBlock> *Node = DT->getRootNode();
             //DomTreeNodeBase<BasicBlock> *Node = DT->getNode(bb);
        
-            SmallVector<BasicBlock *, 20> Descendants;
+            SmallVector<BasicBlock *, 100> Descendants;
             DT->getDescendants(&*bb, Descendants);
 
             if (Descendants.size() == 0) {
-            //    printf("No descendants for this basic block\n");
+                printf("No descendants for this basic block\n");
             }
             for (BasicBlock *DescendBB : Descendants) {
-            //    printf("Examining this bb in the graph: \n");
-            //    DescendBB->print(errs());
-                populateWorkList(worklist, DescendBB);
-            //    printf("size of worklist after populating with bb: %d\n", worklist.size());
+                if (DT->dominates(Node->getBlock(), DescendBB)){
+                    populateWorkList(worklist, DescendBB);
+                }
             }
 
             //printf("Collected all the instruction in all the dominated bb\n");
