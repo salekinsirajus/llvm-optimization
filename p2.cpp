@@ -393,6 +393,9 @@ static void CommonSubexpressionElimination(Module *M) {
     // for autograder
     CSEElim = 0;
     CSEStElim = 0;
+    CSESimplify = 0;
+    CSELdElim = 0;
+    CSEStore2Load = 0;
 
     runCSEBasic(M);
     SimplifyInstructionPass(M);
