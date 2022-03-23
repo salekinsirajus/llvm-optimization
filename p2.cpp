@@ -257,10 +257,6 @@ static void CSEOnWorkListInstructions(std::set<Instruction*> &cleanup_list){
             //printf("\n############# PAIR IN COSIDERATION ###############\n");
             if (isLiteralMatch(*a, *b)){
                 b->replaceAllUsesWith(a);
-                //replaceDominatedUsesWith(a, b, 
-            //    printf("\nReplaced second's uses with first\n");
-            //    printf("Basic Block After\n");
-            //    a->getParent()->print(errs());
                 b->eraseFromParent(); 
                 CSEElim++;
             }
@@ -290,7 +286,6 @@ static void SeparateCSEBasicV2(Module *M){
         for (Function::iterator bb = func->begin(); bb != func->end(); ++bb){
 
             //printf("======Beginning one iteration of a function====\n");
-            DomTreeNodeBase<BasicBlock>::iterator it,end;
             DomTreeNodeBase<BasicBlock> *Node = DT->getRootNode();
             //DomTreeNodeBase<BasicBlock> *Node = DT->getNode(bb);
        
@@ -303,13 +298,16 @@ static void SeparateCSEBasicV2(Module *M){
             for (BasicBlock *DescendBB : Descendants) {
                 if (DT->dominates(Node->getBlock(), DescendBB)){
                     populateWorkList(worklist, DescendBB);
+                    CSEOnWorkListInstructions(worklist);
+                    worklist.clear();
+                }
+                else {
+                    printf("descendant does not dominate!\n");
                 }
             }
 
             //printf("Collected all the instruction in all the dominated bb\n");
-            CSEOnWorkListInstructions(worklist);
             //printf("About to clear the worklist\n");
-            worklist.clear();
             //printf("Emptied out the worklist. Size: %d\n", worklist.size());
             //printf("======finished one iteration of a function====\n");
         }
