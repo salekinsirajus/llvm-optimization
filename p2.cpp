@@ -167,20 +167,66 @@ static llvm::Statistic CSELdElim = {"", "CSELdElim", "CSE redundant loads"};
 static llvm::Statistic CSEStore2Load = {"", "CSEStore2Load", "CSE forwarded store to load"};
 static llvm::Statistic CSEStElim = {"", "CSEStElim", "CSE redundant stores"};
 
-
 static bool ignoreForCSE(Instruction &I){
-    /* Instruction is not a good candidate for CSE if they are of the following
-     * type: Loads, Stores, Terminators, VAArg, Calls, Allocas, and FCmps
-     */
-    if (isa<LoadInst>(&I) || isa<StoreInst>(&I) ||
-        isa<AllocaInst>(&I) || isa<FCmpInst>(&I) ||
-        isa<CallInst>(&I) || isa<VAArgInst>(&I)  ||
-        I.isTerminator()
-       ){
-        return true;
-    }
 
-    return false; 
+    int opcode = I.getOpcode();
+    switch(opcode){
+        case Instruction::Add:
+        case Instruction::FNeg:
+        case Instruction::FAdd:
+        case Instruction::Sub:
+        case Instruction::FSub:
+        case Instruction::Mul:
+        case Instruction::FMul:
+        case Instruction::UDiv:
+        case Instruction::SDiv:
+        case Instruction::FDiv:
+        case Instruction::URem:
+        case Instruction::SRem:
+        case Instruction::FRem:
+        case Instruction::Shl:
+        case Instruction::LShr:
+        case Instruction::AShr:
+        case Instruction::And:
+        case Instruction::Or:
+        case Instruction::Xor:
+
+        case Instruction::GetElementPtr:
+        case Instruction::Trunc:
+        case Instruction::ZExt:
+        case Instruction::SExt:
+        case Instruction::FPToUI:
+        case Instruction::FPToSI:
+        case Instruction::UIToFP:
+        case Instruction::SIToFP:
+        case Instruction::FPTrunc:
+        case Instruction::FPExt:
+        case Instruction::PtrToInt:
+        case Instruction::IntToPtr:
+        case Instruction::BitCast:
+        case Instruction::AddrSpaceCast:
+        case Instruction::ICmp:
+
+        case Instruction::PHI:
+        case Instruction::Select:
+        case Instruction::ExtractElement:
+        case Instruction::InsertElement:
+        case Instruction::ShuffleVector:
+        case Instruction::ExtractValue:
+        case Instruction::InsertValue:
+            return false; // dead, but this is not enough
+
+        case Instruction::Load:
+        {
+            LoadInst *li = dyn_cast<LoadInst>(&I);
+            if (li && li->isVolatile())
+                return false;
+            return true;
+        }
+        default:
+            // any other opcode fails
+            return false;
+    }
 }
 
 static bool isLiteralMatch(Instruction &a, Instruction &b){
@@ -385,6 +431,79 @@ static void EliminateLoadAndStorePass(Module *M){
     }
 }
 
+static bool CSEOnBB(BasicBlock *a){
+    for (auto i = a->begin(); i != a->end(); i++){
+        Instruction* c_i = &*i;
+        if (ignoreForCSE(*c_i)){continue;}
+
+        for (auto j = ++i; j != a->end(); ++j){
+            Instruction* c_j = &*j;
+
+            if (ignoreForCSE(*c_j)){continue;}
+
+            if (isLiteralMatch(*c_i, *c_j)){
+                ++j;
+                c_j->replaceAllUsesWith(c_i);
+                j = c_j->eraseFromParent();
+                CSEElim++;
+              }
+        }
+    }
+
+    return true;
+}
+
+static bool recurse(DominatorTree *tree, DomTreeNode *root){
+    /* Runs CSE on the root and the child node
+     *
+     * */
+    BasicBlock *a = root->getBlock();
+    if (root->isLeaf()){
+        return true;// CSEOnBB(a);
+
+    } 
+    for (DomTreeNode *child: root->children()){
+        BasicBlock *c = child->getBlock(); 
+        
+        for (auto i = a->begin(); i != a->end(); ++i){ 
+            Instruction* c_i = &*i;
+            if (ignoreForCSE(*c_i)){continue;}
+            for(auto j = c->begin(); j != c->end(); ++j){
+                
+                Instruction* c_j = &*j;
+                if (ignoreForCSE(*c_j)){continue;}
+                if (isLiteralMatch(*c_i, *c_j)){
+                    ++j;
+                    c_j->replaceAllUsesWith(c_i);
+                    j = c_j->eraseFromParent();
+                    CSEElim++;
+                  }
+            }
+        }
+        
+        //call its child to do the same thing        
+        recurse(tree, &*child); 
+    }
+    return true;
+}
+
+static void runSeparateCSE(Module *M){
+    /* Builds a dominator tree for each function and performs a recursive
+     * CSE on each children. Since the Dominator Tree of the root node
+     * contains all the nodes, running CSE between each node and its child
+     * will ensure that they are dominated and is safe for replacement
+     * */
+    for (Module::iterator func = M->begin(); func != M->end(); ++func){
+        for (Function::iterator bb = func->begin(); bb != func->end(); ++bb){
+            DominatorTree *DT = nullptr;
+            DT = new DominatorTree(*func);
+            DomTreeNode *Node = DT->getRootNode(); 
+
+            recurse(DT, Node);
+        }
+    }
+}
+
 static void CommonSubexpressionElimination(Module *M) {
     /* Driver function
      * 
@@ -399,6 +518,7 @@ static void CommonSubexpressionElimination(Module *M) {
     CSEDead = 0;
 
     runCSEBasic(M);
+    runSeparateCSE(M);
     SimplifyInstructionPass(M);
     EliminatRedundantLoadPass(M);
     EliminateLoadAndStorePass(M);
