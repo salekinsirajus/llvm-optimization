@@ -216,7 +216,7 @@ static bool ignoreForCSE(Instruction &I){
         case Instruction::ShuffleVector:
         case Instruction::ExtractValue:
         case Instruction::InsertValue:
-            return true; // dead, but this is not enough
+            return false; // dead, but this is not enough
 
         case Instruction::Load:
         {
@@ -295,37 +295,80 @@ static void CSEOnWorkListInstructions(std::set<Instruction*> &cleanup_list){
     std::set<Instruction*>::iterator inner, it;
 
     for (it=cleanup_list.begin(); it != cleanup_list.end(); ++it){
-        Instruction* a = *it;  
+        Instruction* a = *it;
+
         for (inner = it; inner != cleanup_list.end(); ++inner){
             if (it == inner) {continue;}   // idk how to start from the next item 
              
             Instruction* b = *inner;  
         
-            //printf("\n############# PAIR IN COSIDERATION ###############\n");
-            if (isLiteralMatch(*a, *b)){
-                b->replaceAllUsesWith(a);
-                b->eraseFromParent(); 
-                CSEElim++;
+            if (!ignoreForCSE(*b)){
+                //printf("\n############# PAIR IN COSIDERATION ###############\n");
+                if (isLiteralMatch(*a, *b)){
+                    b->replaceAllUsesWith(a);
+                    b->eraseFromParent(); 
+                    CSEElim++;
+                }
+                //printf("\n##################################################\n");
             }
-            //printf("\n##################################################\n");
         }
     }
 }
 
-static bool recurse(DominatorTree *tree, DomTreeNode *root){
-    DomTreeNode::iterator it;
-    std::set<Instruction*> worklist;
+static bool CSEOnBB(BasicBlock *a){
+    for (auto i = a->begin(); i != a->end(); i++){
+        Instruction* c_i = &*i;
+        if (ignoreForCSE(*c_i)){continue;}
 
-    /*
-    if (root->isLeaf()){
-        return true;
-    }*/
-    /*
-    for (auto c: root->children()){
-        c->getBlock();
+        for (auto j = ++i; j != a->end(); ++j){
+            Instruction* c_j = &*j;
+
+            if (ignoreForCSE(*c_j)){continue;}
+
+            if (isLiteralMatch(*c_i, *c_j)){
+                ++j;
+                c_j->replaceAllUsesWith(c_i);
+                j = c_j->eraseFromParent();
+                CSEElim++;
+              }
+        }
     }
-    */
-    
+
+    return true;
+}
+
+static bool recurse(DominatorTree *tree, DomTreeNode *root){
+    //DomTreeNode::iterator it;
+    //std::set<Instruction*> worklist;
+
+    BasicBlock *a = root->getBlock();
+    if (root->isLeaf()){
+        return true;// CSEOnBB(a);
+
+    } 
+    for (DomTreeNode *child: root->children()){
+        BasicBlock *c = child->getBlock(); 
+        
+        for (auto i = a->begin(); i != a->end(); ++i){ 
+            Instruction* c_i = &*i;
+            if (ignoreForCSE(*c_i)){continue;}
+            for(auto j = c->begin(); j != c->end(); ++j){
+                
+                Instruction* c_j = &*j;
+                if (ignoreForCSE(*c_j)){continue;}
+                if (isLiteralMatch(*c_i, *c_j)){
+                    ++j;
+                    c_j->replaceAllUsesWith(c_i);
+                    j = c_j->eraseFromParent();
+                    CSEElim++;
+                  }
+            }
+        }
+        
+        //call its child to do the same thing        
+        recurse(tree, &*child); 
+    }
+    return true;
 }
 
 static void SeparateCSEBasicV3(Module *M){
@@ -364,9 +407,6 @@ static void SeparateCSEBasicV3(Module *M){
 
 static void SeparateCSEBasicV2(Module *M){
 
-    DominatorTreeBase<BasicBlock,false> *DT=nullptr; //dominance
-    DT = new DominatorTreeBase<BasicBlock,false>();
-
     std::set<Instruction*> worklist;
     for (Module::iterator func = M->begin(); func != M->end(); ++func){
 
@@ -377,7 +417,9 @@ static void SeparateCSEBasicV2(Module *M){
             //TODO: opportunity for optmization
             continue;
         }
-        DT->recalculate(*func);
+
+        DominatorTree *DT = nullptr;
+        DT = new DominatorTree(*func);
 
         for (Function::iterator bb = func->begin(); bb != func->end(); ++bb){
 
@@ -411,43 +453,6 @@ static void SeparateCSEBasicV2(Module *M){
 }
 
 
-static bool RunSimplifyInstruction(Instruction &I, const SimplifyQuery &Q){
-    /* Runs the simplifyInstruction library function
-     *
-     * If any simplification was achieved, it replaces the uses of this value
-     * */
-
-    Instruction *k;
-    k = &I;
-    Value* result = SimplifyInstruction(k, Q);
-    
-    if (result != nullptr) {
-        //replace uses with result
-        k->replaceAllUsesWith(result);
-        CSESimplify++;
-        return true;
-    }
-    //leave it be
-    return false;
-}
-
-static void SimplifyInstructionPass(Module *M){
-    /* Runs a pass where you try do simple constant folding and such things
-     *
-     * */
-
-    for (Module::iterator func = M->begin(); func != M->end(); ++func){
-        for (Function::iterator fi = func->begin(); fi != func->end(); ++fi){
-            for (BasicBlock::iterator bbi = fi->begin(); bbi != fi->end(); ++bbi){
-               Instruction& inst = *bbi;
-                if (RunSimplifyInstruction(inst, M->getDataLayout())){
-                    ++bbi;
-                    inst.eraseFromParent();
-                }
-            }
-        }
-    }
-}
 
 static void printModule(Module *M){
     printf("-------------END OF PASS---------------\n");
@@ -464,6 +469,7 @@ static void CommonSubexpressionElimination(Module *M) {
 
     //runCSEBasic(M);
     SeparateCSEBasicV3(M);
+    //SeparateCSEBasicV2(M);
     //printModule(M);
 }
 
