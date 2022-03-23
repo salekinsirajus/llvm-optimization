@@ -258,6 +258,7 @@ static void CSEOnWorkListInstructions(std::set<Instruction*> &cleanup_list){
             //    printf("Basic Block After\n");
             //    a->getParent()->print(errs());
                 b->eraseFromParent(); 
+                CSEElim++;
             }
             //printf("\n##################################################\n");
         }
